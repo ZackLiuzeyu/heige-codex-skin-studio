@@ -109,22 +109,26 @@ div[class*="_PageSurface_"] {
 }
 
 [data-local-conversation-final-assistant],
-[data-response-annotation-conversation] {
+[data-response-annotation-conversation],
+div[data-chatgpt-selection-message-id] {
   background: transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
 }
 
-:root[data-heige-readability="on"] [data-response-annotation-conversation] {
+:root[data-heige-readability="on"] [data-response-annotation-conversation],
+:root[data-heige-readability="on"] div[data-chatgpt-selection-message-id] {
   box-sizing: border-box;
   color: var(--heige-text) !important;
   background: color-mix(in srgb, var(--heige-surface) 90%, transparent) !important;
   border: 1px solid color-mix(in srgb, var(--heige-accent) 18%, transparent) !important;
-  border-radius: 22px;
-  padding: 14px 16px 12px;
-  box-shadow: none !important;
+  border-radius: 20px;
+  padding: 16px 20px;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--heige-accent) 10%, transparent) !important;
   backdrop-filter: none !important;
+  margin-top: 8px;
+  margin-bottom: 8px;
 }
 
 .composer-surface-chrome,
