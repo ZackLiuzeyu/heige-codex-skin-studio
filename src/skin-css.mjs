@@ -110,7 +110,8 @@ div[class*="_PageSurface_"] {
 
 [data-local-conversation-final-assistant],
 [data-response-annotation-conversation],
-div[data-chatgpt-selection-message-id] {
+div[data-chatgpt-selection-message-id],
+div[data-markdown-text-style="assistant-message"] {
   background: transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;
@@ -118,7 +119,7 @@ div[data-chatgpt-selection-message-id] {
 }
 
 :root[data-heige-readability="on"] [data-response-annotation-conversation],
-:root[data-heige-readability="on"] div[data-chatgpt-selection-message-id] {
+:root[data-heige-readability="on"] div[data-markdown-text-style="assistant-message"] {
   box-sizing: border-box;
   color: var(--heige-text) !important;
   background: color-mix(in srgb, var(--heige-surface) 90%, transparent) !important;

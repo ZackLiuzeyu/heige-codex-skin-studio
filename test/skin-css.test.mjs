@@ -19,11 +19,11 @@ test("builds one fast generic skin from a theme and image data URL", () => {
   assert.match(css, /\.composer-surface-chrome/);
   assert.match(
     css,
-    /\[data-local-conversation-final-assistant\],\s*\[data-response-annotation-conversation\],\s*div\[data-chatgpt-selection-message-id\]\s*\{[^}]*background:\s*transparent[^}]*box-shadow:\s*none/s,
+    /\[data-local-conversation-final-assistant\],\s*\[data-response-annotation-conversation\],\s*div\[data-chatgpt-selection-message-id\],\s*div\[data-markdown-text-style="assistant-message"\]\s*\{[^}]*background:\s*transparent[^}]*box-shadow:\s*none/s,
   );
   assert.match(
     css,
-    /:root\[data-heige-readability="on"\]\s+\[data-response-annotation-conversation\],\s*:root\[data-heige-readability="on"\]\s+div\[data-chatgpt-selection-message-id\]\s*\{[^}]*var\(--heige-surface\) 90%/s,
+    /:root\[data-heige-readability="on"\]\s+\[data-response-annotation-conversation\],\s*:root\[data-heige-readability="on"\]\s+div\[data-markdown-text-style="assistant-message"\]\s*\{[^}]*var\(--heige-surface\) 90%/s,
   );
   assert.doesNotMatch(
     css,
@@ -31,11 +31,11 @@ test("builds one fast generic skin from a theme and image data URL", () => {
   );
   assert.match(
     css,
-    /:root\[data-heige-readability="on"\]\s+\[data-response-annotation-conversation\],\s*:root\[data-heige-readability="on"\]\s+div\[data-chatgpt-selection-message-id\]\s*\{[^}]*box-sizing:\s*border-box[^}]*border-radius:\s*20px[^}]*padding:\s*16px 20px/s,
+    /:root\[data-heige-readability="on"\]\s+\[data-response-annotation-conversation\],\s*:root\[data-heige-readability="on"\]\s+div\[data-markdown-text-style="assistant-message"\]\s*\{[^}]*box-sizing:\s*border-box[^}]*border-radius:\s*20px[^}]*padding:\s*16px 20px/s,
   );
   assert.match(
     css,
-    /:root\[data-heige-readability="on"\]\s+\[data-response-annotation-conversation\],\s*:root\[data-heige-readability="on"\]\s+div\[data-chatgpt-selection-message-id\]\s*\{[^}]*backdrop-filter:\s*none/s,
+    /:root\[data-heige-readability="on"\]\s+\[data-response-annotation-conversation\],\s*:root\[data-heige-readability="on"\]\s+div\[data-markdown-text-style="assistant-message"\]\s*\{[^}]*backdrop-filter:\s*none/s,
   );
   assert.doesNotMatch(
     css,
