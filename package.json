@@ -1,0 +1,25 @@
+{
+  "name": "heige-codex-skin-studio",
+  "version": "5.5.18",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "npm@10.9.8",
+  "bin": {
+    "heige-codex-skin": "src/cli.mjs"
+  },
+  "scripts": {
+    "test": "node --test",
+    "release:check": "node --test && node scripts/check-asset-provenance.mjs --release",
+    "doctor": "node src/cli.mjs doctor",
+    "status": "node src/cli.mjs status",
+    "list": "node src/cli.mjs list",
+    "apply": "node src/cli.mjs apply"
+  },
+  "devDependencies": {
+    "happy-dom": "20.10.6",
+    "yazl": "3.3.1"
+  }
+}

@@ -1,0 +1,271 @@
+# 完整手册
+
+这里是 HeiGe Codex Skin Studio 的完整工程手册：安装细节、生命周期语义、Windows 支持、命令行、主题格式和全部常见问题。日常使用看 [README](../README.md) 就够了。
+
+## 这是什么
+
+一个效率优先的 Codex Desktop 换肤工具。它通过本机回环 CDP 把主题实时注入 Codex 界面，不修改 `app.asar`、应用二进制或签名资源。未来 Codex Desktop 若改变启动参数、renderer 结构或界面选择器，本项目仍可能需要适配。
+
+- **一键切换**：应用皮肤后 Codex 顶部中间出现 🎨 菜单，所有已装主题和原生界面即点即换。预设主题会同步切换 Codex 自身的浅色或深色外观，不再需要进入设置手动搭配。嫌按钮碍眼？菜单底部「隐藏此按钮」把它收成一颗半透明小圆点，点圆点即恢复。
+- **自定义上传**：菜单里选「＋ 自定义图片」直接上传本地图片，自动按图片风格取色（主色、辅色、面板底色、文字色），并根据图片亮度同步 Codex 深浅外观。上传成功后写入本机用户主题库（`%APPDATA%\\HeiGeCodexSkinStudio\\themes` / macOS Application Support），成为正式用户主题，并记入启动器 `selectedThemeId` / `lastNonNativeThemeId`，与内置主题一样可在「皮肤常驻」开启时跨重启复现。再次上传会生成新正式主题（同名同图则幂等覆盖）；「我的主题」中的 × 可删除磁盘主题。只有旧版 `custom-upload` 是 renderer localStorage 本地兼容槽，仍可在原生态下显示；新上传不再以该快捷槽为权威存储。
+- **一张图片就是一个主题**：任意 PNG、JPG、JPEG、WebP 直接生成皮肤（配色 + 背景底图）。
+- **AI 生成主题**：把 Skill 交给 Codex，让它先用生图能力产出主图，再自动做成皮肤，无需额外 API Key。
+- **自带可选 Pet**：安装包内附独立的 `Miku Future` 动画桌面宠物，包含待机、奔跑、挥手、跳跃、等待、审查等动作，不覆盖 Codex 内置宠物，也不会在只安装皮肤时强制启用。
+- **生命周期分离**：`pause` 只暂停当前会话，`resume` 恢复当前会话；`restore` 关闭常驻，活跃皮肤会话才重启为原生界面，已关闭或已原生时不额外拉起。
+- **用户决定是否常驻**：顶部菜单「皮肤常驻」开关是唯一受支持的开启常驻入口。关闭后本次继续使用；下次启动恢复原生界面。想再次常驻时，先打开「HeiGe 皮肤启动器」恢复当前会话，再在顶部菜单显式打开常驻开关。
+- **阅读增强默认开启**：最终回复和过程回复都使用当前主题的面板色形成 90％ 半透明阅读底，并保留对称留白。不在长对话区启用实时模糊、阴影、观察器或滚动监听。主题中心可随时关闭，选择会保存在 renderer 本地并同步到其他窗口，不改变皮肤常驻状态。
+
+| 项目 | 参数 |
+|---|---|
+| 适用应用 | OpenAI Codex Desktop（ChatGPT 桌面端）；腾讯 CodeBuddy 桌面端（WorkBuddy）一次性换肤 |
+| 支持平台 | macOS 自动化与真机验证；Windows 跨 PowerShell 自动化，Microsoft Store/MSIX 真机待验证 |
+| 注入方式 | Chrome DevTools Protocol，调试端口仅绑定本机回环 `127.0.0.1:9341` |
+| 内置主题 | 13 个（1 个高精度 Miku 488137 + 10 个游戏轻量主题 + 1 个财神清爽可读主题 + 1 个彩蛋「大佬 · 点烟」） |
+| 运行时依赖 | 不安装 npm 运行时依赖；优先使用可信的 Codex 内置 Node，使用系统 Node 时要求 Node.js 22 或更新版本 |
+| 开发依赖 | `happy-dom` 与 `yazl` 均锁定精确版本，只用于测试与确定性打包 |
+| 自动化验证 | Node、macOS、Windows、安装包与文档门禁，不在文档中写死易过期的测试数量 |
+| 协议 | 代码 MIT，角色素材权利归各自权利人 |
+| 最近更新 | 2026-08-20 |
+
+## 版本与更新检查
+
+主题中心会显示当前 Skin Studio 版本。只有用户主动点击「检查更新」时，控制器才会访问项目的 GitHub 最新正式 Release；发现新版后可一键复制完整更新指令，粘贴到 Codex 对话中执行。检查功能不会后台联网，也不会自行下载、覆盖文件或重启 Codex。
+
+## macOS 安装与日常操作
+
+macOS 安装需要已安装的 Codex Desktop。下载本仓库后：
+
+```bash
+open "<仓库路径>/scripts/install.command"
+```
+
+安装脚本会把工具放到 `~/.codex/heige-codex-skin-studio`，在 `$HOME/Applications` 创建或升级带 Miku 图标的「HeiGe 皮肤启动器」，并把 APP 注册到 macOS LaunchServices。默认安装流程会应用 Miku 预设。打开启动器后会显示 Codex 与 WorkBuddy 两张产品卡片，分别读取各自最近使用的皮肤。每张卡可打开或关闭当前产品皮肤；关闭只暂停当前会话并保留最近主题和常驻选择。底部「一键修复」会跳过未安装产品，对已安装产品执行干净重启并恢复最近皮肤，使用前请保存当前任务。
+
+之后的日常切换都在 Codex 顶部中间的 🎨 菜单里完成。想用自己的图片做皮肤：
+
+```bash
+open "$HOME/.codex/heige-codex-skin-studio/scripts/customize.command"
+```
+
+想安装随包附带的 `Miku Future` Pet：
+
+```bash
+open "$HOME/.codex/heige-codex-skin-studio/scripts/install-pet.command"
+```
+
+安装 Pet 后，完全退出并重新打开 Codex，再到「设置 → 宠物」选择 `Miku Future`。
+
+只暂停当前会话：
+
+```bash
+open "$HOME/.codex/heige-codex-skin-studio/scripts/pause.command"
+```
+
+恢复当前会话：
+
+```bash
+open "$HOME/.codex/heige-codex-skin-studio/scripts/resume.command"
+```
+
+彻底关闭常驻并恢复原生状态。Codex 已关闭时保持关闭，已是原生状态时不额外拉起：
+
+```bash
+open "$HOME/.codex/heige-codex-skin-studio/scripts/restore.command"
+```
+
+`apply.command` 只应用本次会话，不会暗中打开下次启动常驻。
+安装生成的本地「HeiGe 皮肤启动器」是 universal AppKit 应用，使用专用 `launcher-state.command`、`launch-skin.command` 和内部 `launcher-apply` 路由。面板不提供主题选择器，只显示并恢复每个产品状态目录里 `lastNonNativeThemeId` 记录的最近非原生主题；没有有效历史时回退到 `miku-488137`。Codex 与 WorkBuddy 分别使用 9341 和 9342，状态、锁和日志互不覆盖。
+
+Codex 长时间运行后偶发合成器卡死：整窗帧率骤降到约 10 帧，输入和滚动全局迟滞，连新开的空白窗口也一样，与皮肤无关，只有冷重启能恢复。健康会话下 `apply.command` 是幂等的，不会重启进程，此时用 `--restart` 先彻底退出 Codex 再拉起注入：
+
+```bash
+"$HOME/.codex/heige-codex-skin-studio/scripts/apply.command" --restart
+```
+
+`--restart` 可与主题参数连用（`apply.command --restart theme-id`），同样只应用本次会话，不改变常驻选择；Codex 未运行时等同于普通 apply。退出步骤走正常退出并校验进程身份，绝不强杀，30 秒内未退出会明确报错。
+
+## 常驻开关与恢复（macOS）
+
+只能在 Codex 顶部菜单打开「皮肤常驻」开关。打开后，当前用户的 LaunchAgent 运行统一控制器，负责状态恢复、目标识别和漂移修复。关闭开关时会先确认，并明确提醒：关闭后本次继续使用；下次启动恢复原生界面。关闭命令：
+
+```bash
+"$HOME/.codex/heige-codex-skin-studio/scripts/lib/run-cli.zsh" set-persistence false --port 9341
+```
+
+关闭后若想只在当前会话再次拉起最近的皮肤，或在电脑重启、Codex 更新、原生启动导致皮肤不在时恢复，可打开安装时生成的本地应用：
+
+```bash
+open "$HOME/Applications/HeiGe 皮肤启动器.app"
+```
+
+这个本地应用只指向稳定安装目录，不指向下载目录或开发仓库。点击 Codex 卡片后按 9341 现场状态执行最小动作；点击 WorkBuddy 卡片后只走 9342 的一次性注入链。未安装的产品卡片会禁用，失败保留窗口并允许重试，成功后前置目标 APP 并关闭启动器。它不会下载代码、请求管理员权限、创建新的登录项或将 `persistenceEnabled` 改为 `true`，也不会为 WorkBuddy 创建常驻服务。
+
+每次 macOS 安装都会生成或升级 Schema 5 Bundle，其中包含 arm64 与 x86_64 universal 原生二进制、Dock 使用的 Miku `AppIcon.icns`、窗口标题区域独立使用的 `LauncherLogo.png`、当前版本号、稳定入口和本地 ad hoc 完整性签名。启动器通过 `NSWorkspace` 显示本机 Codex 与 WorkBuddy 的真实 APP 图标，未安装时使用 SF Symbol 回退。提交安装前会严格校验二进制架构、Bundle 内容、签名并注册 LaunchServices。普通用户不需要安装 Xcode。ad hoc 签名用于发现本地 Bundle 被改动，不等于 Apple Developer ID 签名或 Apple 公证。
+
+启动器只在底层明确报告 `LOCK_CHAIN_CORRUPT` 时尝试一次静态状态根恢复。恢复前必须同时证明没有已加载的 HeiGe LaunchAgent、没有相关 controller 或 lifecycle helper、锁声明 PID 已失效、CDP 端口无外来监听，并且 `state.json` 与用户主题都通过严格校验。满足条件时，旧状态根会整体原子移动为带时间戳的备份，新目录只恢复通过校验的状态与用户主题，然后只重试一次。普通锁竞争、权限错误、陌生文件、活动进程或第二次失败都会明确停止，不会循环修复。
+
+失败时 APP 会显示 macOS 原生提示。详细诊断写入 `$HOME/Library/Application Support/HeiGeCodexSkinStudio/launcher.log`，文件权限受限并自动轮转。「启用 HeiGe 皮肤」仍只表示恢复当前会话。`enable-skin.command` 是 session-only 兼容名，常驻选择保持不变；`enable-persist.command` 是弃用的非零退出入口，不再执行任何启用动作。
+
+## Windows（待实机验收）
+
+Windows 入口位于 `scripts\windows`。安装只写当前用户目录，并创建「HeiGe Codex Skin Studio\HeiGe 皮肤启动器」开始菜单快捷方式；`apply.bat` 和兼容名 `enable-skin.bat` 都只作用于当前会话，`pause.bat`、`resume.bat` 与 `restore.bat` 分别暂停、恢复和彻底还原；`close-codex.bat` 只安全完整退出已归属的 Codex/GPT 桌面进程并保持关闭，不改常驻、不自动 apply、不自动重启。商店版若出现 `abort-loopback-isolated`（调试端口已带参数但本工具连不上），运行一次 `enable-loopback.bat` 添加 CheckNetIsolation 回环豁免后再重试 apply；该入口会申请一次管理员权限，apply 本身不会每次弹 UAC。若要下次启动仍恢复皮肤，必须在已恢复的 Codex 中手动打开顶部常驻开关；常驻开启后，用户正常重启 Codex（不带调试端口）时，当前用户计划任务中的后台控制器会把它安全退出并以 CDP 重新拉起再注入皮肤。系统 Node 必须为 Node.js 22 或更新版本。
+
+常驻开启成功的标准：开关数秒内变为「已开启」、`%APPDATA%\HeiGeCodexSkinStudio\state.json` 中 `persistenceEnabled` 为 `true`，且任务计划程序里存在 HeiGe 控制器任务。若开关立刻报错或仍为关闭，查看同目录 `injector.log` 中的 `BACKGROUND_START_FAILED` / `LOCK_MALFORMED`；不要长时间停在「正在等待后台确认」。Microsoft Store 版若无法打开调试端口 9341，先按失败 class 处理：`abort-loopback-isolated` 走 `enable-loopback.bat`；`abort-args-dropped` 表示激活未写入调试参数；`abort-incompatible` 才是版本可能禁用了调试端口，需用独立安装版或先走 `close-codex` 后再用启动器恢复。
+
+彻底卸载请双击稳定安装目录内的 `scripts\windows\uninstall.bat`，或从 PowerShell 运行：
+
+```powershell
+& "$HOME\.codex\heige-codex-skin-studio\scripts\windows\uninstall.ps1"
+```
+
+卸载器会先尽力关闭常驻和当前会话皮肤，再注销当前用户计划任务、移除开始菜单快捷方式、结束残留控制器进程，并删除 `%APPDATA%\HeiGeCodexSkinStudio` 与 `$HOME\.codex\heige-codex-skin-studio`。从稳定安装目录内启动时，安装树会在卸载窗口退出后延迟删除。若已手动删除稳定安装目录，可从源码仓库运行 `scripts\windows\uninstall.bat`，它仍会清理计划任务、开始菜单和 AppData 残留。计划任务指向的安装树只缺少 `src\cli.mjs` 时，控制器也会自行注销并正常退出，避免每次登录重复报错。
+
+传统安装与任务计划程序行为由 Windows PowerShell 5.1、PowerShell 7、32 位解析和隔离的 GUID 任务测试覆盖。Microsoft Store/MSIX 的包发现、系统激活、回环隔离诊断与一次性 `enable-loopback` 已实现，但真实 Store 应用豁免后能否完成注入仍标记为真机待验证，不能把自动化结果冒充真机结论。
+
+## WorkBuddy（腾讯 CodeBuddy 桌面端）
+
+同一套注入引擎支持给 WorkBuddy 换肤。所有跟宿主应用绑定的事实收在 `src/products.mjs` 的产品档案层：
+
+| 项目 | Codex | WorkBuddy |
+|---|---|---|
+| 调试端口 | `127.0.0.1:9341` | `127.0.0.1:9342` |
+| 端口开法 | 命令行参数 | 环境变量 `WORKBUDDY_REMOTE_DEBUGGING_PORT`，`ps` 里看不到端口，进程身份判定走端口归属 |
+| renderer 来源 | `app://-` | `file://`，跨源请求带 `Origin: null` |
+| 控制通道与常驻 | 支持 | 不支持，原因见下 |
+| 状态目录 | `HeiGeCodexSkinStudio` | `HeiGeCodexSkinStudio-workbuddy`，锁与主题库都按产品隔离 |
+| 真机验证 | macOS 与 Windows 传统安装 | macOS（WorkBuddy 5.3.11）；Windows 只有结构，未在真机验证 |
+
+日常入口：
+
+```bash
+"<仓库路径>/scripts/workbuddy-apply.command" --restart          # 先安全退出 WorkBuddy，再以调试模式拉起并应用
+"<仓库路径>/scripts/workbuddy-apply.command" genshin-night      # 应用指定主题
+"<仓库路径>/scripts/workbuddy-restore.command"                  # 还原原生界面
+```
+
+`workbuddy-enable-skin.command` 是 `workbuddy-apply.command` 的兼容名，只应用当前会话。Node CLI 的等价写法是任意命令加 `--app workbuddy`，环境变量 `HEIGE_SKIN_APP=workbuddy` 是回退，显式参数优先。
+
+为什么不支持常驻：常驻开关由 renderer 回调本机控制服务完成，控制服务的来源校验只认 `app://-`。WorkBuddy 的 renderer 是 `app.asar` 里的本地 `file://` 页面，请求带的是 `Origin: null`，放行它等于掏空 CSRF 闸门，所以这一版明确拒绝 `set-persistence --app workbuddy`，宁可少个功能，不动安全校验。重启 WorkBuddy 后皮肤消失属预期，重跑一次 apply 即可。
+
+皮肤 CSS 有独立档案 `src/skin-css-workbuddy.mjs`，同时覆盖 WorkBuddy 的三层设计令牌：`--wb-*` 结构层、`--cb-*` 语义层、`--cb-vscode-*` 桥接层。令牌同时声明在 `:root` 和 `body` 上，因为宿主主题文件用 `:root, body[data-vscode-theme-name="IDE Light"]` 选择器把整套令牌在 body 又声明了一遍，只写 `:root` 会被盖掉。选择器只挂语义类名和稳定 data 属性，不使用会随构建变化的 CSS Module 哈希类名。品牌色、状态色（错误、成功、警告）和自洽的深色配对（tooltip、遮罩）保持原样不动。
+
+WorkBuddy 自身不带可执行的 Node，运行入口需要系统 Node.js 22 或更新版本。
+
+## 交给 Codex 使用
+
+把 `output/heige-codex-skin-studio.skill` 交给 Codex，可以直接说：
+
+> 用这张图片给 Codex 做一个皮肤并应用。
+
+或者：
+
+> 先生成一张蓝紫色赛博城市主图，再把它做成 Codex 皮肤。
+
+Skill 会优先调用 Codex 当前可用的图片生成能力产出主图，然后调用本地确定性工具创建并应用主题。换肤本身不需要额外 API Key。现成的生图提示词见[主题提示词库](theme-prompts.md)。
+
+## 极简主题格式
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "my-skin",
+  "name": "My Skin",
+  "hero": "hero.webp",
+  "appearance": "dark",
+  "previewFocus": { "x": 50, "y": 24 },
+  "thumbnailFocus": { "x": 50, "y": 50 },
+  "thumbnailZoom": 100,
+  "colors": {
+    "accent": "#24C9D7",
+    "secondary": "#EF8FD3",
+    "surface": "#F7FBFF",
+    "text": "#17344F"
+  },
+  "copy": {
+    "brand": "My Codex",
+    "headline": "今天构建什么？"
+  }
+}
+```
+
+只有 `schemaVersion`、`id`、`name` 和 `hero` 必填。图片必须位于主题目录内，颜色、文案、`appearance`、`previewFocus`、`thumbnailFocus` 和 `thumbnailZoom` 都可省略；`appearance` 可设为 `light`、`dark` 或 `system`。`previewFocus` 的 `x`、`y` 使用 0 到 100 的整数，只控制主题中心大横幅。`thumbnailFocus` 使用相同坐标范围，控制主题小卡片和顶部圆形入口。`thumbnailZoom` 使用 100 到 400 的整数，只放大这两种小缩略图，默认 100。三项都不改变 Codex 全屏背景构图。
+
+## 命令行
+
+下面的 Node CLI 主要用于源码开发与诊断。macOS 生命周期操作优先使用 `scripts` 下对应的 `.command` 稳定入口。Windows 必须使用 `scripts/windows/apply.ps1` 或 `scripts/windows/apply.bat`、`scripts/windows/enable-skin.ps1` 或 `scripts/windows/enable-skin.bat`、`scripts/windows/pause.ps1`、`scripts/windows/resume.ps1`、`scripts/windows/restore.ps1` 或 `scripts/windows/restore.bat`、`scripts/windows/close-codex.ps1` 或 `scripts/windows/close-codex.bat`；彻底卸载使用 `scripts/windows/uninstall.ps1` 或 `scripts/windows/uninstall.bat`。这些入口负责 Windows Store/MSIX 激活、进程重启和当前用户残留清理。直接运行 Node CLI 遇到需要启动或重启 Codex 的场景会安全拒绝，不会生成 macOS 生命周期动作。
+
+```bash
+node src/cli.mjs list
+node src/cli.mjs create --image "/absolute/path/hero.webp" --name "My Skin"
+node src/cli.mjs apply --theme my-skin-id
+node src/cli.mjs enable-skin --theme my-skin-id # 兼容名，只恢复当前会话
+node src/cli.mjs set-persistence false
+node src/cli.mjs status
+node src/cli.mjs pause
+node src/cli.mjs resume
+node src/cli.mjs restore
+node src/cli.mjs doctor
+```
+
+所有命令支持 `--app codex|workbuddy` 选择宿主产品，缺省是 codex；`set-persistence` 在 `--app workbuddy` 下会明确报错，见上方 WorkBuddy 一节。
+
+## 常见问题
+
+### 换肤会弄坏 Codex 或破坏签名吗？
+
+本工具本身不修改 `app.asar`、二进制或签名资源。皮肤通过 [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/) 在运行时注入；选择关闭常驻后，本次会话仍保留皮肤，下次正常启动回到官方原生界面。
+
+### 支持 Windows 吗？
+
+支持传统安装，并实现了 Microsoft Store/MSIX 的确定性发现与系统激活路径。Windows 自动化覆盖 Windows PowerShell 5.1、PowerShell 7、32 位解析与隔离任务，但 Microsoft Store 真机待验证。商店版和使用系统运行时的安装要求 Node.js 22 或更新版本。不要使用内置 Administrator 账户启动 Store 应用。
+
+### 装完 ChatGPT 桌面端提示「Windows 安装未完成」怎么办？
+
+这是 ChatGPT 应用自身的初始化步骤（需要一次性管理员权限），和本工具无关，但不过这一步就用不上皮肤。先试用户实测有效的修法：删除用户目录下的 Codex 配置文件（路径 `C:\Users\你的用户名\.codex\config.toml`，删除前先改名成 `config.toml.bak` 备份），再重启应用。这个文件损坏或含新版本不认的配置项时，初始化会一直失败，且重装也治不了（重装不清用户目录）。仍不行再按顺序排查：弹出的用户账户控制对话框里默认高亮的是「否」，直接回车等于拒绝，要明确点「是」；别用内置 Administrator 账户，换普通管理员账户；如果系统把 UAC 整个关了（EnableLUA=0），授权弹窗永远出不来，先把用户账户控制调回默认档再重试。都不行可以点「继续受限访问」先把应用用起来再跑换肤脚本，受限模式对注入的影响未经实机验证，遇到问题开 Issue 反馈。
+
+### 怎么用自己的图片做主题？
+
+三条路：顶部中间的 🎨 菜单选「＋ 自定义图片」直接上传（自动按图片取色）；双击 `customize.command` 走图形界面；或用命令行 `node src/cli.mjs create --image 图片路径 --name 主题名`。
+
+### 自定义图片的文字或底色有色差、看不清怎么办？
+
+从 `5.2.1` 开始，内置主题和菜单上传的自定义图片都会自动同步 Codex 深浅外观。若图片主体亮度与背景差异很大，自动判断仍可能不符合你的偏好，此时可在 Codex 自己的「设置 → 外观 → 主题」里手动调整。
+
+若背景细节仍干扰 AI 回复文字，请保持主题中心的「阅读增强」开启。浅色主题会使用接近白色的 90％ 半透明底，深色主题会使用深色半透明底；最终回复和过程回复使用同一套规则。关闭后所有 AI 回复正文恢复完全透明。
+
+![外观主题配色设置](images/appearance-theme-contrast.jpg)
+
+*Codex 设置 → 外观：自动联动不符合预期时，可在这里手动切换系统／浅色／深色。*
+
+同一页下方的「深色主题」区还能改强调色、背景、前景和对比度，可以进一步微调。
+
+### Codex 更新版本后主题还能用吗？
+
+多数只更新内容的版本不需要重新打补丁，因为本项目不修改安装包。但 CDP 启动参数、renderer 分类和界面选择器仍属于兼容边界；未来 Codex Desktop 变化时可能需要更新本项目。若升级后失败，请先运行 `doctor` 并在 Issue 中附上脱敏结果。
+
+### 提示「端口未就绪」「无法注入」怎么办？
+
+九成是旧实例没退干净：Codex 有任务在跑时退出会弹确认框，老实例还活着，新实例的调试参数会被它接管丢弃。手动完全退出 Codex（Cmd+Q 并确认，活动监视器里确认没有 ChatGPT 进程）再重跑脚本即可。如果报错说「已带调试参数启动但端口未开放」，说明你的 Codex 版本可能禁用了本机调试端口，请开 Issue 附上版本号，我们会跟进启动兼容方案。
+
+### 怎么让皮肤重启后也一直在？
+
+只能在顶部菜单打开常驻开关。关闭开关会先确认，并提示「关闭后本次继续使用；下次启动恢复原生界面」。以后先打开「HeiGe 皮肤启动器」恢复当前会话，再由用户打开顶部菜单常驻开关，才会恢复下次启动常驻。
+
+### 本机回环端口是否等于安全？
+
+不等于。CDP 只绑定 `127.0.0.1`，可以减少网络暴露，但 CDP 本身无认证；本机同权限进程仍可能访问调试端口并调用 `Runtime.evaluate`。菜单控制接口另有 token、严格 schema 与 revision 校验，但它不能给 CDP 增加浏览器级隔离。完整边界见 [SECURITY.md](../SECURITY.md)。
+
+## 设计边界
+
+这是一个本机工具，不是安全沙箱。控制器只修复被严格分类为 Codex 主 renderer 的目标，并对图片、manifest、菜单数据和日志设置上限。macOS 验证日期与证据见 `docs/release`；Windows 自动化证据与 Microsoft Store 真机待验证状态分开记录。
+
+本仓库前身走 ASAR 修改路线，当前实现已改为 CDP。远程 `v4.0.0` 与 `v5-asar-legacy` 在 2026-07-16 仍指向同一 commit，因此不能把后者当成已经核实的独立遗留快照；远程处置建议见 [审计加固处置报告](release/2026-07-16-audit-hardening-disposition.md)。
+
+## 开发
+
+```bash
+npm test
+npm run doctor
+```
+
+改动 `README.md` 或 `llms.txt` 后，跑 `node scripts/sync-llms.mjs` 重新生成 `llms-full.txt`，否则文档门禁测试会失败。新增图片素材必须在 `ASSET_PROVENANCE.md` 登记来源，`npm test` 里的 provenance 检查会逐文件核对。

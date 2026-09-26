@@ -1,0 +1,235 @@
+import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { randomUUID } from "node:crypto";
+import test from "node:test";
+import { promisify } from "node:util";
+
+import {
+  inspectTrustedProductionRuntime,
+  inspectLaunchAgent,
+  isExactLaunchctlPrintNotFound,
+  registerControllerAgent,
+  trustedUserHome,
+  unregisterControllerAgent,
+} from "../src/macos-launch-agent.mjs";
+
+const execFileAsync = promisify(execFile);
+const enabled = process.platform === "darwin" && process.env.HEIGE_RUN_LAUNCHD_INTEGRATION === "1";
+const liveRuntimeEnabled = process.platform === "darwin" && process.env.HEIGE_RUN_LIVE_MAC_RUNTIME === "1";
+
+test("the current Mac resolves a trusted signed production runtime", { skip: !liveRuntimeEnabled }, async () => {
+  const trustedRuntime = await inspectTrustedProductionRuntime();
+  assert.match(trustedRuntime.nodePath, /\/Contents\/Resources\/cua_node\/bin\/node$/);
+  assert.equal(
+    trustedRuntime.controllerPath,
+    join(trustedUserHome(), ".codex", "heige-codex-skin-studio", "src", "cli.mjs"),
+  );
+});
+
+test("isolated random-label LaunchAgent can be registered and removed", { skip: !enabled }, async (t) => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "heige-launchd-integration-")),
+  );
+  const label = `com.heige.codex-skin-controller.test.${randomUUID()}`;
+  const processUid = process.getuid();
+  const options = {
+    home: root,
+    launchAgentsDir: join(root, "Library", "LaunchAgents"),
+    stateDir: join(root, "state"),
+    label,
+    processUid,
+    programArguments: ["/bin/sleep", "60"],
+    testMode: true,
+  };
+
+  t.after(async () => {
+    const errors = [];
+    let loaded = false;
+    try {
+      await execFileAsync("/bin/launchctl", ["print", `gui/${processUid}/${label}`]);
+      loaded = true;
+    } catch (error) {
+      if (!isExactLaunchctlPrintNotFound(error, { label, processUid })) errors.push(error);
+    }
+    if (loaded) {
+      try {
+        await execFileAsync("/bin/launchctl", ["bootout", `gui/${processUid}/${label}`]);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    try {
+      await unregisterControllerAgent(options);
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      await execFileAsync("/bin/launchctl", ["print", `gui/${processUid}/${label}`]);
+      errors.push(new Error(`cleanup left LaunchAgent loaded: ${label}`));
+    } catch (error) {
+      if (!isExactLaunchctlPrintNotFound(error, { label, processUid })) errors.push(error);
+    }
+    try {
+      await rm(root, { recursive: true, force: true });
+      await assert.rejects(stat(root), (error) => error.code === "ENOENT");
+    } catch (error) {
+      errors.push(error);
+    }
+    if (errors.length > 0) {
+      throw new AggregateError(errors, `isolated LaunchAgent cleanup failed for ${label}`);
+    }
+  });
+
+  await registerControllerAgent(options);
+  assert.equal((await inspectLaunchAgent(options)).loaded, true);
+  await unregisterControllerAgent(options);
+  assert.equal((await inspectLaunchAgent(options)).loaded, false);
+});
+
+test("isolated random-label LaunchAgent self-unregisters through a distinct helper", { skip: !enabled }, async (t) => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "heige-launchd-self-unregister-")),
+  );
+  const label = `com.heige.codex-skin-controller.test.${randomUUID()}`;
+  const processUid = process.getuid();
+  const stateDir = join(root, "state");
+  const scriptPath = join(root, "self-unregister.mjs");
+  const configPath = join(root, "config.json");
+  const triggerPath = join(root, "trigger");
+  const resultPath = join(root, "result.json");
+  const moduleUrl = pathToFileURL(join(
+    import.meta.dirname,
+    "..",
+    "src",
+    "macos-launch-agent.mjs",
+  )).href;
+  const programArguments = [process.execPath, scriptPath, configPath];
+  const options = {
+    home: root,
+    launchAgentsDir: join(root, "Library", "LaunchAgents"),
+    stateDir,
+    label,
+    processUid,
+    programArguments,
+    testMode: true,
+  };
+  await writeFile(configPath, JSON.stringify({
+    ...options,
+    triggerPath,
+    resultPath,
+  }));
+  await writeFile(scriptPath, `
+import { open, readFile, rename, stat, unlink } from "node:fs/promises";
+import { unregisterControllerAgent } from ${JSON.stringify(moduleUrl)};
+const config = JSON.parse(await readFile(process.argv[2], "utf8"));
+while (true) {
+  try { await stat(config.triggerPath); break; }
+  catch (error) { if (error?.code !== "ENOENT") throw error; }
+  await new Promise((resolve) => setTimeout(resolve, 25));
+}
+const result = await unregisterControllerAgent({
+  ...config,
+  currentPid: process.pid,
+  deferIfCurrentProcess: true,
+});
+const temporaryResultPath = config.resultPath + "." + process.pid + ".tmp";
+let resultHandle;
+try {
+  resultHandle = await open(temporaryResultPath, "wx", 0o600);
+  await new Promise((resolve) => setTimeout(resolve, 75));
+  await resultHandle.writeFile(JSON.stringify(result) + "\\n", "utf8");
+  await resultHandle.sync();
+  await resultHandle.close();
+  resultHandle = undefined;
+  await rename(temporaryResultPath, config.resultPath);
+} catch (error) {
+  await resultHandle?.close().catch(() => {});
+  await unlink(temporaryResultPath).catch((cleanupError) => {
+    if (cleanupError?.code !== "ENOENT") throw cleanupError;
+  });
+  throw error;
+}
+`);
+
+  let helperLabel = null;
+  t.after(async () => {
+    const errors = [];
+    const labels = [label, helperLabel].filter(Boolean);
+    for (const cleanupLabel of labels) {
+      try {
+        await execFileAsync("/bin/launchctl", [
+          "bootout",
+          `gui/${processUid}/${cleanupLabel}`,
+        ]);
+      } catch (error) {
+        try {
+          await execFileAsync("/bin/launchctl", [
+            "print",
+            `gui/${processUid}/${cleanupLabel}`,
+          ]);
+          errors.push(error);
+        } catch (inspectionError) {
+          if (!isExactLaunchctlPrintNotFound(inspectionError, {
+            label: cleanupLabel,
+            processUid,
+          })) errors.push(inspectionError);
+        }
+      }
+    }
+    try {
+      await rm(root, { recursive: true, force: true });
+    } catch (error) {
+      errors.push(error);
+    }
+    if (errors.length > 0) {
+      throw new AggregateError(errors, "isolated self-unregister cleanup failed");
+    }
+  });
+
+  await registerControllerAgent(options);
+  assert.equal((await inspectLaunchAgent(options)).loaded, true);
+  await writeFile(triggerPath, "go\n");
+
+  let result = null;
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    try {
+      result = JSON.parse(await readFile(resultPath, "utf8"));
+      break;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  assert.equal(result?.deferred, true);
+  assert.equal(result?.loaded, true);
+  helperLabel = result.helperLabel;
+  assert.match(
+    helperLabel,
+    /^com\.heige\.codex-skin-controller\.unregister\.[0-9a-f-]{36}$/,
+  );
+
+  let finalInspection = null;
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    finalInspection = await inspectLaunchAgent(options);
+    if (!finalInspection.loaded && !finalInspection.plistExists) break;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  assert.equal(finalInspection?.plistExists, false);
+  assert.equal(finalInspection?.loaded, false);
+  let helperRemoved = false;
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    try {
+      await execFileAsync("/bin/launchctl", ["print", `gui/${processUid}/${helperLabel}`]);
+    } catch (error) {
+      if (!isExactLaunchctlPrintNotFound(error, { label: helperLabel, processUid })) throw error;
+      helperRemoved = true;
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  assert.equal(helperRemoved, true);
+});

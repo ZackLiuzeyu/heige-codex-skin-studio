@@ -1,0 +1,9 @@
+.DS_Store
+node_modules/
+pet/
+.worktrees/
+.staging/
+output/*
+!output/heige-codex-skin-studio.skill
+.superpowers/
+reports/
