@@ -118,7 +118,6 @@ div[data-markdown-text-style="assistant-message"] {
   backdrop-filter: none !important;
 }
 
-:root[data-heige-readability="on"] [data-response-annotation-conversation],
 :root[data-heige-readability="on"] div[data-markdown-text-style="assistant-message"] {
   box-sizing: border-box;
   color: var(--heige-text) !important;
